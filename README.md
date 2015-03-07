@@ -3,7 +3,7 @@
 草榴下载器
 
 使用方法：
-"`shell
+"`
 python catch.py
 `"
 
