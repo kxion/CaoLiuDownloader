@@ -104,7 +104,7 @@ class GetCaoliuPic(object):
             self.DealDir("Images/" + self.currentDir)
             local_filename = "Images/" + self.currentDir + '/' + url.split('/')[-1]
         if os.path.exists(local_filename):
-            print('\t skip'+local_filename)
+            print('\t skip '+local_filename)
             return
         else:
             print('\t=>'+local_filename)
