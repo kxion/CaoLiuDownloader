@@ -1,5 +1,6 @@
 [web]
 page = 1
+num_to_download = 5
 
 [file]
 mono = false

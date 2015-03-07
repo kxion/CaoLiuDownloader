@@ -20,6 +20,7 @@ class GetCaoliuPic(object):
         self.cf = ConfigParser.ConfigParser()
         self.pageNum = 1
         self.isMono = True
+        self.numToDownload = -1
 
         if not os.path.exists('config'):
             print('No config file. Creating a default one.')
@@ -36,10 +37,12 @@ class GetCaoliuPic(object):
         self.cf.read("config")
         self.pageNum = self.cf.getint('web','page')
         self.isMono = self.cf.getboolean('file','mono')
+        self.numToDownload = self.cf.getint('web','num_to_download')
 
     def SetDefaultConfig(self):
         self.cf.add_section('web')
         self.cf.set('web','page','1')
+        self.cf.set('web','num_to_download','-1')
         self.cf.add_section('file')
         self.cf.set('file','mono','true')
         with open('config', 'wb') as configfile:
@@ -63,15 +66,19 @@ class GetCaoliuPic(object):
     def FetchThreadsLinks(self, htmlSource):
         prog = re.compile(self.ThreadsRegex, re.IGNORECASE)
         matchesThreads = prog.findall(htmlSource)
+        num = 0
         for href in matchesThreads:
             if self.CheckThreadsValid(href) is True:
                 #print href[0]
                 threadurl = "http://wo.yao.cl/" + href[0]
-                print(threadurl)
+                print('Thread '+str(num + 1)+':'+threadurl)
                 self.currentDir = href[0].split('/')[-3] + href[0].split('/')[-2] + href[0].split('/')[-1]
                 self.currentDir = self.currentDir.split('.')[-2]
                 print(self.currentDir+'/')
                 self.FetchImageLinks(threadurl)
+                num+=1
+                if self.numToDownload>0 and num>=self.numToDownload:
+                    break
 
     def CheckThreadsValid(self, href):
         return href[0][0:8] == "htm_data"
