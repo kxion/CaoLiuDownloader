@@ -1,3 +1,6 @@
+[basic]
+log_file = log.txt
+
 [web]
 page = 1
 num_to_download = -1

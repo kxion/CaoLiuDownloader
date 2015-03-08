@@ -1,3 +1,5 @@
+import sys
+import logging
 import os
 import os.path
 import requests
@@ -26,11 +28,17 @@ class GetCaoliuPic(object):
         self.pageNum = 1
         self.isMono = True
         self.numToDownload = -1
+        self.loggingFile = 'log.txt'
+        
 
         if not os.path.exists('config'):
             print('No config file. Creating a default one.')
             self.SetDefaultConfig();
         self.LoadConfig()
+        
+        #init logging file
+        logging.basicConfig(filename = os.path.join(os.getcwd(), self.loggingFile), level = logging.WARN, filemode = 'w', format = '%(asctime)s - %(levelname)s: %(message)s') 
+
 
         print("===============   start   ===============");
         i = self.pageNum
@@ -45,8 +53,11 @@ class GetCaoliuPic(object):
         self.pageNum = self.cf.getint('web','page')
         self.isMono = self.cf.getboolean('file','mono')
         self.numToDownload = self.cf.getint('web','num_to_download')
+        self.loggingFile = self.cf.get('basic','log_file')
 
     def SetDefaultConfig(self):
+        self.cf.add_section('basic')
+        self.cf.set('basic','log_file','log.txt')
         self.cf.add_section('web')
         self.cf.set('web','page','1')
         self.cf.set('web','num_to_download','-1')
@@ -61,13 +72,17 @@ class GetCaoliuPic(object):
             return path;
 
     def FetchHtml(self, url):
-        response = requests.get(url)
-        if response.status_code != 200:
-            return error("Failed to fetch html. CODE:%i" % response.status_code)
-        elif (response.text) == 0:
-            return error("Empty html.")
-        else:
-            return success(response.text)
+        try:
+            response = requests.get(url)
+            if response.status_code != 200:
+                return error("Failed to fetch html. CODE:%i" % response.status_code)
+            elif (response.text) == 0:
+                return error("Empty html.")
+            else:
+                return success(response.text)
+        except requests.ConnectionError:
+            logging.error('Can not connect to %s' % url)
+            return error("The server is not responding.")
 
     def DoFetch(self, pageNum):
         res = self.FetchHtml("http://wo.yao.cl/thread0806.php?fid=16&search=&page={0}".format(pageNum))
@@ -113,7 +128,9 @@ class GetCaoliuPic(object):
         for href in matchesImgSrc:
             if not self.CheckIsUrlFormat(href):
                 continue;
-            self.download_file(href)
+            res = self.download_file(href)
+            if get_error(res):
+                print(get_error(res))
 
     def CheckIsUrlFormat(self, value):
         return self._isUrlFormat.match(value) is not None
@@ -126,18 +143,21 @@ class GetCaoliuPic(object):
             self.DealDir("Images/" + self.currentDir)
             local_filename = "Images/" + self.currentDir + '/' + url.split('/')[-1]
         if os.path.exists(local_filename):
-            print('\t skip '+local_filename)
-            return
+            return error('\t skip '+local_filename)
         else:
             print('\t=>'+local_filename)
             # NOTE the stream=True parameter
-            r = requests.get(url, stream=True)
+            try:
+                r = requests.get(url, stream=True)
+            except requests.ConnectionError:
+                logging.error('Can not connect to %s' % url)
+                return error('The server is not responding.')
             with open(local_filename, 'wb') as f:
                 for chunk in r.iter_content(chunk_size=1024):
                     if chunk: # filter out keep-alive new chunks
                         f.write(chunk)
                         f.flush()
-            return local_filename
+            return success(local_filename)
 
 if __name__ == '__main__':
     g = GetCaoliuPic()
