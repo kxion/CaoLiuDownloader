@@ -5,6 +5,7 @@ log_file = log.txt
 page = 1
 num_to_download = -1
 retry_times = 5
+domain = wo.yao.cl
 
 [file]
 mono = false

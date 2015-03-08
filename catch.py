@@ -27,6 +27,7 @@ class GetCaoliuPic(object):
         self.numToDownload = -1
         self.loggingFile = 'log.txt'
         self.retryTimes = 5
+        self.caoliudomain = 'example.com'
 
         if not os.path.exists('config'):
             print('No config file. Creating a default one.')
@@ -51,6 +52,7 @@ class GetCaoliuPic(object):
         self.numToDownload = self.cf.getint('web','num_to_download')
         self.loggingFile = self.cf.get('basic','log_file')
         self.retryTimes = self.cf.getint('web','retry_times')
+        self.caoliudomain = self.cf.get('web','domain')
 
     def SetDefaultConfig(self):
         self.cf.add_section('basic')
@@ -59,6 +61,7 @@ class GetCaoliuPic(object):
         self.cf.set('web','page','1')
         self.cf.set('web','num_to_download','-1')
         self.cf.set('web','retry_times','5')
+        self.cf.set('web','domain','example.com')
         self.cf.add_section('file')
         self.cf.set('file','mono','true')
         with open('config', 'wb') as configfile:
@@ -89,7 +92,7 @@ class GetCaoliuPic(object):
                 return error("The server is not responding.")
 
     def DoFetch(self, pageNum):
-        res = self.FetchHtml("http://wo.yao.cl/thread0806.php?fid=16&search=&page={0}".format(pageNum))
+        res = self.FetchHtml("http://"+self.caoliudomain+"/thread0806.php?fid=16&search=&page={0}".format(pageNum))
         if get_error(res):
             return res
         html = get_val(res)
@@ -103,7 +106,7 @@ class GetCaoliuPic(object):
         for href in matchesThreads:
             if self.CheckThreadsValid(href) is True:
                 #print href
-                threadurl = "http://wo.yao.cl/" + href
+                threadurl = 'http://'+self.caoliudomain+'/' + href
                 print('Thread '+str(num + 1)+':'+threadurl)
                 self.currentDir = href.split('/')[-3] + href.split('/')[-2] + href.split('/')[-1]
                 self.currentDir = self.currentDir.split('.')[-2]
