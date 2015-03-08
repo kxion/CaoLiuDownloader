@@ -5,6 +5,11 @@ import re
 import ConfigParser
 #from HTMLParser import HTMLParser
 
+def success(val): return val,None
+def error(why): return None,why
+def get_val(m_val): return m_val[0]
+def get_error(m_val): return m_val[1]
+
 class GetCaoliuPic(object):
     """docstring for ClassName"""
     def __init__(self):
@@ -13,7 +18,7 @@ class GetCaoliuPic(object):
         # sample: <img src="http://ww1.sinaimg.cn/mw600/005vbOHfgw1eohghggdpjj30cz0ll0x5.jpg" style="max-width: 486px; max-height: 450px;">
         #self.ImgRegex = r'<p><img[^>]*?src\s*=\s*["\']?([^\'" >]+?)[ \'"][^>]*?></p>'
         self.ImgRegex = r'<input\s*type=\'image\'\s*src\s*=\s*["\']?([^\'" >]+?)[ \'"]'
-        self.ThreadsRegex = r'<h3><a\s*href\s*=\s*["\']?([^\'">]+?)[ \'"][^>]*?>(<font color=green>)?[^<]*(</font>)?</a></h3>'
+        self.ThreadsRegex = r'<h3><a\s*href\s*=\s*["\']?([^\'">]+?)[ \'"][^>]*?>(?:<font color=green>)?[^<]*(?:</font>)?</a></h3>'
         self._isUrlFormat = re.compile(r'https?://([\w-]+\.)+[\w-]+(/[\w\- ./?%&=]*)?');
         self._path = self.DealDir("Images")
         self.currentDir = ""
@@ -30,7 +35,9 @@ class GetCaoliuPic(object):
         print("===============   start   ===============");
         i = self.pageNum
         print("===============   loading page {0}   ===============".format(i))
-        self.DoFetch(i)
+        res = self.DoFetch(i)
+        if get_error(res):
+            print(get_error(res))
         print("===============   end   ===============")
 
     def LoadConfig(self):
@@ -53,15 +60,22 @@ class GetCaoliuPic(object):
             os.mkdir(path);
             return path;
 
-    def DoFetch(self, pageNum):
-        response = requests.get("http://wo.yao.cl/thread0806.php?fid=16&search=&page={0}".format(pageNum))
-        # request.Credentials = CredentialCache.DefaultCredentials;
+    def FetchHtml(self, url):
+        response = requests.get(url)
+        if response.status_code != 200:
+            return error("Failed to fetch html. CODE:%i" % response.status_code)
+        elif (response.text) == 0:
+            return error("Empty html.")
+        else:
+            return success(response.text)
 
-        if response.status_code != 200: return;
-        # stream = response.GetResponseStream();
-        if len(response.text) == 0: return;
-        #print response.text;
-        self.FetchThreadsLinks(response.text);
+    def DoFetch(self, pageNum):
+        res = self.FetchHtml("http://wo.yao.cl/thread0806.php?fid=16&search=&page={0}".format(pageNum))
+        if get_error(res):
+            return res
+        html = get_val(res)
+        self.FetchThreadsLinks(html);
+        return success(0)
 
     def FetchThreadsLinks(self, htmlSource):
         prog = re.compile(self.ThreadsRegex, re.IGNORECASE)
@@ -69,34 +83,35 @@ class GetCaoliuPic(object):
         num = 0
         for href in matchesThreads:
             if self.CheckThreadsValid(href) is True:
-                #print href[0]
-                threadurl = "http://wo.yao.cl/" + href[0]
+                #print href
+                threadurl = "http://wo.yao.cl/" + href
                 print('Thread '+str(num + 1)+':'+threadurl)
-                self.currentDir = href[0].split('/')[-3] + href[0].split('/')[-2] + href[0].split('/')[-1]
+                self.currentDir = href.split('/')[-3] + href.split('/')[-2] + href.split('/')[-1]
                 self.currentDir = self.currentDir.split('.')[-2]
                 print(self.currentDir+'/')
-                self.FetchImageLinks(threadurl)
+                res = self.FetchImageLinks(threadurl)
+                if(get_error(res)):
+                    print(get_error(res))
                 num+=1
                 if self.numToDownload>0 and num>=self.numToDownload:
                     break
 
     def CheckThreadsValid(self, href):
-        return href[0][0:8] == "htm_data"
+        return href[0:8] == "htm_data"
 
     def FetchImageLinks(self, threadurl):
-        response = requests.get(threadurl)
-        if response.status_code != 200: return;
-        if len(response.text) == 0: return;
-        #print response.text;
-        self.FetchLinksFromSource(response.text);
+        res = self.FetchHtml(threadurl)
+        if get_error(res):
+            return res
+        html = get_val(res)
+        self.FetchLinksFromSource(html);
+        return success(0)
 
     def FetchLinksFromSource(self, htmlSource):
         prog = re.compile(self.ImgRegex, re.IGNORECASE)
         matchesImgSrc = prog.findall(htmlSource)
         for href in matchesImgSrc:
             if not self.CheckIsUrlFormat(href):
-                #print href
-            #else:
                 continue;
             self.download_file(href)
 
