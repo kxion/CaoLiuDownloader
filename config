@@ -4,6 +4,7 @@ log_file = log.txt
 [web]
 page = 1
 num_to_download = -1
+retry_times = 5
 
 [file]
 mono = false

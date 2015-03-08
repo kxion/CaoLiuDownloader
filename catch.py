@@ -5,7 +5,6 @@ import os.path
 import requests
 import re
 import ConfigParser
-#from HTMLParser import HTMLParser
 
 def success(val): return val,None
 def error(why): return None,why
@@ -16,9 +15,7 @@ class GetCaoliuPic(object):
     """docstring for ClassName"""
     def __init__(self):
         super(GetCaoliuPic, self).__init__()
-        self.max = None
-        # sample: <img src="http://ww1.sinaimg.cn/mw600/005vbOHfgw1eohghggdpjj30cz0ll0x5.jpg" style="max-width: 486px; max-height: 450px;">
-        #self.ImgRegex = r'<p><img[^>]*?src\s*=\s*["\']?([^\'" >]+?)[ \'"][^>]*?></p>'
+
         self.ImgRegex = r'<input\s*type=\'image\'\s*src\s*=\s*["\']?([^\'" >]+?)[ \'"]'
         self.ThreadsRegex = r'<h3><a\s*href\s*=\s*["\']?([^\'">]+?)[ \'"][^>]*?>(?:<font color=green>)?[^<]*(?:</font>)?</a></h3>'
         self._isUrlFormat = re.compile(r'https?://([\w-]+\.)+[\w-]+(/[\w\- ./?%&=]*)?');
@@ -29,16 +26,15 @@ class GetCaoliuPic(object):
         self.isMono = True
         self.numToDownload = -1
         self.loggingFile = 'log.txt'
-        
+        self.retryTimes = 5
 
         if not os.path.exists('config'):
             print('No config file. Creating a default one.')
             self.SetDefaultConfig();
         self.LoadConfig()
-        
-        #init logging file
-        logging.basicConfig(filename = os.path.join(os.getcwd(), self.loggingFile), level = logging.WARN, filemode = 'w', format = '%(asctime)s - %(levelname)s: %(message)s') 
 
+        #init logging file
+        logging.basicConfig(filename = os.path.join(os.getcwd(), self.loggingFile), level = logging.WARN, filemode = 'w', format = '%(asctime)s - %(levelname)s: %(message)s')
 
         print("===============   start   ===============");
         i = self.pageNum
@@ -54,6 +50,7 @@ class GetCaoliuPic(object):
         self.isMono = self.cf.getboolean('file','mono')
         self.numToDownload = self.cf.getint('web','num_to_download')
         self.loggingFile = self.cf.get('basic','log_file')
+        self.retryTimes = self.cf.getint('web','retry_times')
 
     def SetDefaultConfig(self):
         self.cf.add_section('basic')
@@ -61,6 +58,7 @@ class GetCaoliuPic(object):
         self.cf.add_section('web')
         self.cf.set('web','page','1')
         self.cf.set('web','num_to_download','-1')
+        self.cf.set('web','retry_times','5')
         self.cf.add_section('file')
         self.cf.set('file','mono','true')
         with open('config', 'wb') as configfile:
@@ -72,17 +70,23 @@ class GetCaoliuPic(object):
             return path;
 
     def FetchHtml(self, url):
-        try:
-            response = requests.get(url)
-            if response.status_code != 200:
-                return error("Failed to fetch html. CODE:%i" % response.status_code)
-            elif (response.text) == 0:
-                return error("Empty html.")
-            else:
-                return success(response.text)
-        except requests.ConnectionError:
-            logging.error('Can not connect to %s' % url)
-            return error("The server is not responding.")
+        retry = 0
+        while True:
+            try:
+                response = requests.get(url)
+                if response.status_code != 200:
+                    return error("Failed to fetch html. CODE:%i" % response.status_code)
+                elif (response.text) == 0:
+                    return error("Empty html.")
+                else:
+                    return success(response.text)
+            except requests.ConnectionError:
+                if retry<self.retryTimes:
+                    retry+=1
+                    print('Can\'t retrive html. retry %i' % retry)
+                    continue
+                logging.error('Can not connect to %s' % url)
+                return error("The server is not responding.")
 
     def DoFetch(self, pageNum):
         res = self.FetchHtml("http://wo.yao.cl/thread0806.php?fid=16&search=&page={0}".format(pageNum))
@@ -147,11 +151,18 @@ class GetCaoliuPic(object):
         else:
             print('\t=>'+local_filename)
             # NOTE the stream=True parameter
-            try:
-                r = requests.get(url, stream=True)
-            except requests.ConnectionError:
-                logging.error('Can not connect to %s' % url)
-                return error('The server is not responding.')
+            retry = 0
+            while True:
+                try:
+                    r = requests.get(url, stream=True)
+                    break
+                except requests.ConnectionError:
+                    if retry<self.retryTimes:
+                        retry+=1
+                        print('\tCan\'t retrive image. retry %i' % retry)
+                        continue
+                    logging.error('Can not connect to %s' % url)
+                    return error('The server is not responding.')
             with open(local_filename, 'wb') as f:
                 for chunk in r.iter_content(chunk_size=1024):
                     if chunk: # filter out keep-alive new chunks
